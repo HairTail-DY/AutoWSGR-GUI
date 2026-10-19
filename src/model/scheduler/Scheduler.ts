@@ -72,6 +72,8 @@ export class Scheduler {
   private _status: SchedulerStatus = 'not_connected';
   private systemActive = false;
   private autoExpedition = true;
+  /** 远征收取后是否自动浴室维修，由设置页开关同步，默认关。 */
+  private expeditionAutoRepair = false;
   /** 当前停止请求的来源，避免把停止条件误当作用户暂停。 */
   private stopRequest: {
     taskId: string;
@@ -115,6 +117,11 @@ export class Scheduler {
     } else if (this.systemActive && !this.expeditionTimer.isRunning) {
       this.expeditionTimer.start();
     }
+  }
+
+  /** 开关远征收取后的自动浴室维修（设置页「远征后自动修理」，默认关） */
+  setExpeditionAutoRepair(enabled: boolean): void {
+    this.expeditionAutoRepair = enabled === true;
   }
 
   get status(): SchedulerStatus {
@@ -977,12 +984,14 @@ export class Scheduler {
 
   // ── 内部: 远征后处理 ──
 
-  /** 远征检查 + 奖励领取由后端统一执行; 远征后的浴室维修已关闭。 */
+  /** 远征检查、奖励领取和空闲时的自动维修均由后端统一执行。 */
   private async handlePostExpedition(): Promise<void> {
-    // 远征后不再自动浴室维修: allow_repair 固定 false, 后端(/api/expedition/auto_check)
-    // 会跳过第 3 步 repair_in_bath。手动「浴室修理」按钮不受影响。
+    // 远征后的自动浴室维修由设置页「远征后自动修理」开关控制（默认关）。
+    // allow_repair=false 时后端跳过 repair_in_bath。
     try {
-      const response = await this.api.expeditionAutoCheck(false);
+      const response = await this.api.expeditionAutoCheck(
+        this.expeditionAutoRepair,
+      );
       if (!response.success) {
         this.emitLog('debug', '自动远征检查跳过');
         return;
